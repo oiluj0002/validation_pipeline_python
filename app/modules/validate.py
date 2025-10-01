@@ -1,7 +1,10 @@
 import csv
 from pathlib import Path
+from typing import Any
 
-class ValidateCsv():
+Row = dict[str, Any]
+
+class CsvValidator():
     def __init__(self, path:str):
         self.file:list[dict] = []
         self.area_validation = ("Vendas", "TI", "Financeiro", "RH", "Operações")
@@ -60,8 +63,8 @@ class ValidateCsv():
 
         return valids, invalids
 
-    def export(self, validated:list[dict], errors:list[dict]):
-        output_path = Path("out")
+    def export(self, path:str, validated:list[dict], errors:list[dict]):
+        output_path = Path(path)
         validated_path = "validated.csv"
         errors_path = "errors.csv"
 

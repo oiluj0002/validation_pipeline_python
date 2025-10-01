@@ -1,7 +1,8 @@
-from modules.validate import ValidateCsv
+from modules.validate import CsvValidator
 
 if __name__ == "__main__":
-    validator = ValidateCsv("data/funcionarios.csv")
+    validator = CsvValidator("data/funcionarios.csv")
     validated, errors = validator.validate()
+    path = "out"
     
-    validator.export(validated=validated, errors=errors)
+    validator.export(path, validated, errors)
