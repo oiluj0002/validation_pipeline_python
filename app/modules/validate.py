@@ -1,85 +1,76 @@
 import csv
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 Row = dict[str, Any]
 
-class CsvValidator():
-    def __init__(self, path:str):
-        self.file:list[dict] = []
-        self.area_validation = ("Vendas", "TI", "Financeiro", "RH", "Operações")
+class CsvValidator:
+    def __init__(self):
+        self.valid_areas = {"Vendas", "TI", "Financeiro", "RH", "Operações"}
 
-        with open(path, "r") as f:
-            for i in csv.DictReader(f):
-                self.file.append(i)
-
-    def validate(self) -> tuple[list[dict], list[dict]]:
-        valids = []
-        invalids = []
-
-        for fields in self.file:
-            try:
-                name = str(fields['nome']).strip()
-                area = str(fields['area']).strip()
-                sallary = float(fields['salario'])
-                bonus = float(fields['bonus_percentual'])
-                
-                # Removes fields with blank names
-                if not name:
-                    fields["motivo"] = "Campo 'nome' em branco."
-                    invalids.append(fields)
-                    continue
-
-                # Removes fields with names with numbers
-                if any(part.isdigit() for part in name.split()):
-                    fields["motivo"] = "Campo 'nome' possui número."
-                    invalids.append(fields)
-                    continue
-
-                # Removes fields that aren't in the areas specified
-                if area not in self.area_validation:
-                    fields["motivo"] = f"{area} fora das áreas especificadas."
-                    invalids.append(fields)
-                    continue
-
-                # Removes fields that have negative sallaries
-                if sallary < 0:
-                    fields["motivo"] = "Campo 'salário' possui valor negativo."
-                    invalids.append(fields)
-                    continue
-
-                # Removes fields that have bonuses off the range
-                if bonus < 0 or bonus > 1:
-                    fields["motivo"] = "Campo 'bonus' fora do limite"
-                    invalids.append(fields)
-                    continue
-
-                valids.append(fields)
+    def _validate_row(self, row: Row) -> tuple[bool, Optional[str]]:
+        try:
+            name = str(row['nome']).strip()
+            area = str(row['area']).strip()
+            salary = float(row['salario'])
+            bonus = float(row['bonus_percentual'])
             
-            except(ValueError, TypeError):
-                fields["motivo"] = "Variável inserida com tipo não aceitável"
-                invalids.append(fields)
-                continue
+            # Removes fields with blank names
+            if not name:
+                return False, "Field 'nome' is null."
 
-        return valids, invalids
+            # Removes fields with names with numbers
+            if any(part.isdigit() for part in name.split()):
+                return False, "Field 'nome' has a number."
 
-    def export(self, path:str, validated:list[dict], errors:list[dict]):
+            # Removes fields that aren't in the areas specified
+            if area not in self.valid_areas:
+                return False, f"Field {area} is not valid"
+
+            # Removes fields that have negative sallaries
+            if salary < 0:
+                return False, "Field 'salário' has negative values."
+
+            # Removes fields that have bonuses off the range
+            if not 0 <= bonus <= 1:
+                return False, "Field 'bonus' out of bounds"
+        
+        except(ValueError, TypeError, KeyError) as e:
+            return False, f"Type Error: {e}"
+
+        return True, None
+
+    def _export_csv(self, path: str, filename: str, data: list[Row]):
         output_path = Path(path)
-        validated_path = "validated.csv"
-        errors_path = "errors.csv"
+        output_path.mkdir(parents=True, exist_ok=True)
 
-        if not output_path.exists():
-            output_path.mkdir()
-            print(f"Directory '{output_path}' created.")
+        file_path = output_path / filename
+        with open(file_path, "w", newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
 
-        with open(output_path / validated_path, "w", newline='', encoding='utf-8') as f:
-            buffer = csv.DictWriter(f, fieldnames=validated[0].keys())
-            buffer.writeheader()
-            buffer.writerows(validated)
-            print(f"File '{validated_path}' written.")
+        print(f"File '{filename}' written with {len(data)} rows.")
 
-        with open(output_path / errors_path, "w", newline='', encoding='utf-8') as f:
-            buffer = csv.DictWriter(f, fieldnames=errors[0].keys())
-            buffer.writeheader()
-            buffer.writerows(errors)
-            print(f"File '{errors_path}' written.")
+    def process(self, input_path: str, output_path: str):
+        valids: list[Row] = []
+        invalids: list[Row] = []
+
+        try:
+            with open(input_path, "r") as f:
+                reader = csv.DictReader(f)
+
+                for row in reader:
+                    is_valid, reason = self._validate_row(row)
+                    if is_valid:
+                        valids.append(row)
+                    else:
+                        row['motivo'] = reason
+                        invalids.append(row)
+        
+        except FileNotFoundError as e:
+            print(f"File '{input_path}' not found: {e}")
+        
+        # Export files
+        self._export_csv(output_path, "validated.csv", valids)
+        self._export_csv(output_path, "erros.csv", invalids)
